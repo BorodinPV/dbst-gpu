@@ -1,7 +1,11 @@
 import com.aparapi.Kernel;
 import com.aparapi.Range;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -14,9 +18,9 @@ import java.util.stream.Collectors;
 public class ArithmeticCode {
 
     public static void main(String[] args) {
-
-//        String text = readFile(files.getFile());
-        String text = "Меня зовут павел и это моя первая программа для сжатия!";
+        FileTest file = new FileTest("C:/Users/pborodin/IdeaProjects/dbst-gpu/text.txt");
+        String text = readFile(file.getFile());
+//        String text = "Меня зовут павел FE S FSDG AD SFiYSDFIVSdlgkBSRGIOFLAedsNJKLGBLSDFGJHADERFG.KDLGK!";
 
 
         List<Character> alphabet = new ArrayList<>();
@@ -27,10 +31,32 @@ public class ArithmeticCode {
         double isDecode = 0.0;
         for (char c : text.toCharArray()) {
             double v = adaptiveCoding(c, alphabet);
+//            System.out.println("v = " + v);
             isDecode = v;
         }
         String decode = decode(isDecode, alphabet, text.length());
         System.out.println("decode = " + decode);
+    }
+
+    public static String readFile(File inputFile) {
+        FileReader file;
+        BufferedReader reader;
+        try {
+            file = new FileReader(inputFile);
+            reader = new BufferedReader(file);
+            StringBuilder stringBuilder = new StringBuilder();
+
+            List<String> collect = reader.lines().collect(Collectors.toList());
+
+            for (String s : collect) {
+                stringBuilder.append(s + "\n");
+            }
+            reader.close();
+            return stringBuilder.toString();
+        } catch (Exception e) {
+            System.out.println("Could not read file");
+            return null;
+        }
     }
 
 
@@ -81,35 +107,58 @@ public class ArithmeticCode {
         Map<Character, ArraySegments> segmentsMap = arraySegments
                 .parallelStream()
                 .collect(Collectors.toMap(ArraySegments::getSymbol, Function.identity(),
-                (address1, address2) -> address1));
-
-        Map<Character, Weight> weightMap = weights
-                .parallelStream()
-                .collect(Collectors.toMap(Weight::getSymbol, Function.identity(),
                         (address1, address2) -> address1));
+
+//        Map<Character, Weight> weightMap = weights
+//                .parallelStream()
+//                .collect(Collectors.toMap(Weight::getSymbol, Function.identity(),
+//                        (address1, address2) -> address1));
 
         double left = 0;
         double right = 1;
-
-        for (int i = 0; i < alphabet.size(); i++) {
-            // увеличение веса символа строки
-            weightMap.get(in).setWeight(weights.get(i).getWeight() + 1);
-//            ArraySegments symbolAlphabet = findSymbolAlphabet(in, arraySegments);
-            ArraySegments symbolAlphabet = segmentsMap.get(in);
+//
+//        for (int i = 0; i < alphabet.size(); i++) {
+//            // увеличение веса символа строки
+////            weightMap.get(in).setWeight(weights.get(i).getWeight() + 1);
+////            ArraySegments symbolAlphabet = findSymbolAlphabet(in, arraySegments);
+//            ArraySegments symbolAlphabet = segmentsMap.get(in);
 //            double newRight = (left + (right - left) * symbolAlphabet.getSegment().getRight());
 //            double newLeft = (left + (right - left) * symbolAlphabet.getSegment().getLeft());
-
-            float[] testGpu = getTestGpu(left, right, symbolAlphabet.getSegment().getLeft(), symbolAlphabet.getSegment().getRight());
-
-            left = testGpu[0];
-            right = testGpu[1];
-            for (float v : testGpu) {
-                System.out.println("--------------");
-                System.out.println("v = " + v);
+//
+////            float[] testGpu = getTestGpu(left, right, symbolAlphabet.getSegment().getLeft(), symbolAlphabet.getSegment().getRight());
+//
+////            left = testGpu[0];
+//            left = newLeft;
+////            right = testGpu[1];
+//            right = newRight;
+////            arraySegments = resizeSegments(alphabet, weights, arraySegments);
+//        }
+        double[][] symbol = new double[2][alphabet.size()];
+        for (int i = 0; i < 1; i++) {
+            for (int j = 0; j < alphabet.size(); j++) {
+                symbol[i][j] = segmentsMap.get(in).getSegment().getLeft();
             }
-            arraySegments = resizeSegments(alphabet, weights, arraySegments);
         }
 
+        for (int i = 1; i < 2; i++) {
+            for (int j = 0; j < alphabet.size(); j++) {
+                symbol[i][j] = segmentsMap.get(in).getSegment().getRight();
+            }
+        }
+
+        return test(alphabet.size(), symbol);
+
+
+//        return (left + right) / 2;
+    }
+
+    private static double test(int size, double[][] symbol) {
+        double left = 0;
+        double right = 1;
+        for (int i = 0; i < size; i++) {
+             right = (left + (right - left) * symbol[0][i]);
+             left = (left + (right - left) * symbol[1][i]);
+        }
         return (left + right) / 2;
     }
 
@@ -143,17 +192,34 @@ public class ArithmeticCode {
         for (int i = 0; i < alphabet.size(); i++) {
             sum = sum + weight.get(i).getWeight();
         }
+        Map<Character, Weight> weightMap = weight.parallelStream().collect(Collectors.toMap(Weight::getSymbol, Function.identity(),
+                (address1, address2) -> address1));
+        Map<Character, ArraySegments> segmentsMap = arraySegments.parallelStream().collect(Collectors.toMap(ArraySegments::getSymbol, Function.identity(),
+                (address1, address2) -> address1));
 
         for (int i = 0; i < arraySegments.size(); i++) {
-            findSymbolAlphabet(alphabet.get(i), arraySegments).getSegment().setLeft(l);
-            findWeightSymbol(alphabet.get(i), weight).getWeight();
-            double v = l + (findWeightSymbol(alphabet.get(i), weight).getWeight() / (double) sum);
-            findSymbolAlphabet(alphabet.get(i), arraySegments).getSegment().setRight(v);
+            segmentsMap.get(alphabet.get(i)).getSegment().setLeft(l);
+            double v = l + (weightMap.get(alphabet.get(i)).getWeight() / (double) sum);
+            segmentsMap.get(alphabet.get(i)).getSegment().setRight(v);
             l = v;
-
         }
         return arraySegments;
     }
+
+//    private static List<ArraySegments> resizeSegments2(int[] alphabet, Weight[] weight, int size) {
+//        double l = 0.0F;
+//        int sum = 0;
+//
+//        for (int i = 0; i < size; i++) {
+//            sum = sum + weight[i].getWeight();
+//        }
+//
+//        for (int i = 0; i < size; i++) {
+//            double v = l + (weightMap.get(alphabet.get(i)).getWeight() / (double) sum);
+//            l = v;
+//        }
+//        return arraySegments;
+//    }
 
 
     private static List<Weight> defineWeights(List<Character> alphabet) {
